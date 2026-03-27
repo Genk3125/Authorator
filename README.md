@@ -1,2 +1,2 @@
-# Authrator
+# Authorator
 A Github plugin
