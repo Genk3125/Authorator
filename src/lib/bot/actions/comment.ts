@@ -35,7 +35,7 @@ export function buildRevertMessage(
   username: string,
   branch: string
 ): string {
-  const prefix = "🤖 **Authrator Bot**\n\n";
+  const prefix = "🤖 **Authorator Bot**\n\n";
 
   switch (action) {
     case "revert_push":
