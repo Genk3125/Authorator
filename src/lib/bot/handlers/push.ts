@@ -8,10 +8,15 @@ import {
   buildRevertMessage,
 } from "../actions/comment";
 
+const NULL_SHA = "0000000000000000000000000000000000000000";
+
 interface PushEvent {
   ref: string;
   before: string;
   after: string;
+  created: boolean;
+  deleted: boolean;
+  forced: boolean;
   pusher: { name: string };
   sender: { login: string };
   repository: {
@@ -32,9 +37,14 @@ export async function handlePush(
   const beforeSha = payload.before;
   const afterSha = payload.after;
 
-  // Ignore branch deletion events (after is all zeros)
-  if (afterSha === "0000000000000000000000000000000000000000") {
-    return { action: "ignored", skipped: true };
+  // Ignore tag events
+  if (!payload.ref.startsWith("refs/heads/")) {
+    return { action: "not_branch", skipped: true };
+  }
+
+  // Ignore branch deletion events
+  if (payload.deleted || afterSha === NULL_SHA) {
+    return { action: "branch_deleted", skipped: true };
   }
 
   const config = await getRepoConfig(owner, repo);
@@ -58,11 +68,45 @@ export async function handlePush(
     return { action: "allowed" };
   }
 
-  // Revert unauthorized push
-  await revertPush(octokit, owner, repo, branch, beforeSha);
+  // New branch push (before is null SHA) — can't revert, need to delete
+  if (payload.created || beforeSha === NULL_SHA) {
+    try {
+      await octokit.rest.git.deleteRef({
+        owner,
+        repo,
+        ref: `heads/${branch}`,
+      });
+    } catch (err) {
+      console.error(`Failed to delete new protected branch ${branch}:`, err);
+    }
 
-  const message = buildRevertMessage("revert_push", username, branch);
-  await postCommitComment(octokit, owner, repo, afterSha, message);
+    await addActionLog(owner, repo, {
+      repo: `${owner}/${repo}`,
+      action: "revert_push",
+      user: username,
+      branch,
+      reason: `非権限者 ${username} が保護ブランチ ${branch} を新規作成 → 削除`,
+      commitSha: afterSha,
+    });
+
+    return { action: "deleted_new_protected_branch" };
+  }
+
+  // Revert unauthorized push
+  try {
+    await revertPush(octokit, owner, repo, branch, beforeSha);
+  } catch (err) {
+    console.error(`Failed to revert push on ${branch}:`, err);
+    throw err;
+  }
+
+  try {
+    const message = buildRevertMessage("revert_push", username, branch);
+    await postCommitComment(octokit, owner, repo, afterSha, message);
+  } catch (err) {
+    // Comment failure is not critical
+    console.error(`Failed to post comment for revert on ${branch}:`, err);
+  }
 
   await addActionLog(owner, repo, {
     repo: `${owner}/${repo}`,

@@ -5,25 +5,42 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RepoConfig } from "@/lib/db/schema";
 
+interface HealthStatus {
+  status: string;
+  checks: Record<string, string>;
+}
+
 export default function DashboardPage() {
   const [repos, setRepos] = useState<RepoConfig[]>([]);
   const [admins, setAdmins] = useState<string[]>([]);
+  const [health, setHealth] = useState<HealthStatus | null>(null);
   const [newOwner, setNewOwner] = useState("");
   const [newRepo, setNewRepo] = useState("");
   const [newAdmin, setNewAdmin] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+
+  // Password change
+  const [showPwChange, setShowPwChange] = useState(false);
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [pwMsg, setPwMsg] = useState("");
+  const [pwErr, setPwErr] = useState("");
+
   const router = useRouter();
 
   async function fetchData() {
-    const [reposRes, adminsRes] = await Promise.all([
+    const [reposRes, adminsRes, healthRes] = await Promise.all([
       fetch("/api/settings/repos"),
       fetch("/api/auth/admins"),
+      fetch("/api/health"),
     ]);
     const reposData = await reposRes.json();
     const adminsData = await adminsRes.json();
+    const healthData = await healthRes.json();
     setRepos(reposData.repos || []);
     setAdmins(adminsData.admins || []);
+    setHealth(healthData);
     setLoading(false);
   }
 
@@ -83,9 +100,32 @@ export default function DashboardPage() {
     fetchData();
   }
 
-  function handleLogout() {
-    document.cookie = "authrator_token=; path=/; max-age=0";
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
+  }
+
+  async function handlePasswordChange(e: React.FormEvent) {
+    e.preventDefault();
+    setPwErr("");
+    setPwMsg("");
+    const res = await fetch("/api/auth/password", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setPwErr(data.error);
+      return;
+    }
+    setPwMsg("パスワードを変更しました");
+    setCurrentPw("");
+    setNewPw("");
+    setTimeout(() => {
+      setPwMsg("");
+      setShowPwChange(false);
+    }, 2000);
   }
 
   if (loading) {
@@ -98,18 +138,83 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-8">
+      {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-white">Authorator</h1>
           <p className="text-gray-400 text-sm">ダッシュボード</p>
         </div>
-        <button
-          onClick={handleLogout}
-          className="text-sm text-gray-400 hover:text-white transition-colors"
-        >
-          ログアウト
-        </button>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setShowPwChange(!showPwChange)}
+            className="text-sm text-gray-400 hover:text-white transition-colors"
+          >
+            PW変更
+          </button>
+          <button
+            onClick={handleLogout}
+            className="text-sm text-gray-400 hover:text-white transition-colors"
+          >
+            ログアウト
+          </button>
+        </div>
       </div>
+
+      {/* Health status */}
+      {health && (
+        <div className={`mb-6 p-4 rounded-lg border ${
+          health.status === "healthy"
+            ? "bg-green-900/20 border-green-800"
+            : "bg-yellow-900/20 border-yellow-800"
+        }`}>
+          <div className="flex items-center gap-3 text-sm">
+            <span className={`w-2 h-2 rounded-full ${
+              health.status === "healthy" ? "bg-green-400" : "bg-yellow-400"
+            }`} />
+            <span className={health.status === "healthy" ? "text-green-300" : "text-yellow-300"}>
+              {health.status === "healthy" ? "全システム正常" : "一部サービスに問題あり"}
+            </span>
+            <div className="flex gap-3 ml-auto text-xs">
+              {Object.entries(health.checks).map(([key, val]) => (
+                <span key={key} className={val === "ok" || val === "configured" ? "text-green-400" : "text-red-400"}>
+                  {key}: {val}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Password change */}
+      {showPwChange && (
+        <form onSubmit={handlePasswordChange} className="mb-6 p-6 bg-gray-900 rounded-lg border border-gray-800">
+          <h2 className="text-lg font-semibold text-white mb-4">パスワード変更</h2>
+          <div className="flex gap-3">
+            <input
+              type="password"
+              value={currentPw}
+              onChange={(e) => setCurrentPw(e.target.value)}
+              className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+              placeholder="現在のパスワード"
+              required
+            />
+            <input
+              type="password"
+              value={newPw}
+              onChange={(e) => setNewPw(e.target.value)}
+              className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+              placeholder="新しいパスワード (8文字以上)"
+              minLength={8}
+              required
+            />
+            <button type="submit" className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
+              変更
+            </button>
+          </div>
+          {pwErr && <div className="text-red-400 text-sm mt-2">{pwErr}</div>}
+          {pwMsg && <div className="text-green-400 text-sm mt-2">{pwMsg}</div>}
+        </form>
+      )}
 
       {/* Add repo */}
       <form onSubmit={handleAddRepo} className="mb-8 p-6 bg-gray-900 rounded-lg border border-gray-800">
@@ -144,7 +249,9 @@ export default function DashboardPage() {
         <h2 className="text-lg font-semibold text-white mb-4">監視リポジトリ</h2>
         <div className="space-y-3">
           {repos.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">リポジトリが登録されていません</div>
+            <div className="text-center py-8 text-gray-500 bg-gray-900 rounded-lg border border-gray-800">
+              リポジトリが登録されていません
+            </div>
           ) : (
             repos.map((config) => (
               <div
@@ -157,7 +264,12 @@ export default function DashboardPage() {
                     <span className={`text-xs px-2 py-0.5 rounded-full ${config.enabled ? "bg-green-900 text-green-300" : "bg-gray-800 text-gray-400"}`}>
                       {config.enabled ? "有効" : "無効"}
                     </span>
-                    <span className="text-xs text-gray-500">保護: {config.protectedBranches.join(", ")}</span>
+                    <span className="text-xs text-gray-500">
+                      保護: {config.protectedBranches.join(", ") || "なし"}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      権限者: {config.authorizedUsers.length}人
+                    </span>
                   </div>
                 </Link>
                 <button
@@ -176,7 +288,7 @@ export default function DashboardPage() {
       <div className="p-6 bg-gray-900 rounded-lg border border-gray-800">
         <h2 className="text-lg font-semibold text-white mb-2">ダッシュボード管理者</h2>
         <p className="text-sm text-gray-400 mb-4">
-          GitHub OAuth でログイン可能な GitHub ユーザー
+          GitHub OAuth でログイン可能な GitHub アカウント
         </p>
 
         <div className="flex flex-wrap gap-2 mb-4">

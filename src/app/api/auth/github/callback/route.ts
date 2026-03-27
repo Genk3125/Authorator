@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Get GitHub user info
-  const userRes = await fetch("https://github.com/api/v3/user", {
+  const userRes = await fetch("https://api.github.com/user", {
     headers: {
       Authorization: `Bearer ${tokenData.access_token}`,
       Accept: "application/vnd.github+json",

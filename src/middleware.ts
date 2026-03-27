@@ -2,8 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  let response = NextResponse.next();
 
-  if (pathname.startsWith("/dashboard") || pathname.startsWith("/api/settings") || pathname.startsWith("/api/auth/admins")) {
+  // Security headers for all responses
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+
+  // Protected routes: dashboard, settings API, admin API
+  if (
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/api/settings") ||
+    pathname.startsWith("/api/auth/admins")
+  ) {
     const token = request.cookies.get("authrator_token")?.value;
     if (!token) {
       if (pathname.startsWith("/api/")) {
@@ -12,8 +23,6 @@ export function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
 
-    // JWT verification is done in the edge runtime with a simple check
-    // Full verification happens in the API routes
     try {
       const parts = token.split(".");
       if (parts.length !== 3) throw new Error("Invalid token");
@@ -25,15 +34,20 @@ export function middleware(request: NextRequest) {
       if (pathname.startsWith("/api/")) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
-      const response = NextResponse.redirect(new URL("/login", request.url));
-      response.cookies.delete("authrator_token");
-      return response;
+      const redirect = NextResponse.redirect(new URL("/login", request.url));
+      redirect.cookies.delete("authrator_token");
+      return redirect;
     }
   }
 
-  return NextResponse.next();
+  return response;
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/api/settings/:path*", "/api/auth/admins"],
+  matcher: [
+    "/dashboard/:path*",
+    "/api/settings/:path*",
+    "/api/auth/admins",
+    "/api/github/webhooks",
+  ],
 };

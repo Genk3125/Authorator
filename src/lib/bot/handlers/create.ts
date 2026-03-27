@@ -3,10 +3,7 @@ import { getRepoConfig } from "@/lib/db/queries";
 import { addActionLog } from "@/lib/db/queries";
 import { canUserCreateBranch } from "../permissions";
 import { deleteBranch } from "../actions/delete-branch";
-import {
-  postCommitComment,
-  buildRevertMessage,
-} from "../actions/comment";
+import { buildRevertMessage } from "../actions/comment";
 
 interface CreateEvent {
   ref: string;
@@ -15,6 +12,7 @@ interface CreateEvent {
   repository: {
     owner: { login: string };
     name: string;
+    default_branch: string;
   };
 }
 
@@ -22,7 +20,6 @@ export async function handleCreate(
   octokit: Octokit,
   payload: CreateEvent
 ): Promise<{ action: string; skipped?: boolean }> {
-  // Only handle branch creation
   if (payload.ref_type !== "branch") {
     return { action: "not_branch", skipped: true };
   }
@@ -42,18 +39,34 @@ export async function handleCreate(
   }
 
   // Delete unauthorized branch
-  await deleteBranch(octokit, owner, repo, branch);
+  try {
+    await deleteBranch(octokit, owner, repo, branch);
+  } catch (err) {
+    console.error(`Failed to delete branch ${branch}:`, err);
+    throw err;
+  }
 
-  // Post comment on the latest commit of the default branch
-  const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
-  const { data: ref } = await octokit.rest.git.getRef({
-    owner,
-    repo,
-    ref: `heads/${repoData.default_branch}`,
-  });
-
-  const message = buildRevertMessage("delete_branch", username, branch);
-  await postCommitComment(octokit, owner, repo, ref.object.sha, message);
+  // Post a comment on an issue to notify (since the branch no longer exists)
+  try {
+    const message = buildRevertMessage("delete_branch", username, branch);
+    // Create an issue for notification
+    const { data: issue } = await octokit.rest.issues.create({
+      owner,
+      repo,
+      title: `[Authorator] ブランチ ${branch} を削除しました`,
+      body: message,
+      labels: ["authorator"],
+    });
+    // Close immediately — this is just for notification
+    await octokit.rest.issues.update({
+      owner,
+      repo,
+      issue_number: issue.number,
+      state: "closed",
+    });
+  } catch (err) {
+    console.error(`Failed to create notification issue for branch ${branch}:`, err);
+  }
 
   await addActionLog(owner, repo, {
     repo: `${owner}/${repo}`,

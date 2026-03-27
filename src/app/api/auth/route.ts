@@ -8,8 +8,19 @@ import {
   getAdminUsers,
 } from "@/lib/auth";
 import { getRedis } from "@/lib/db/redis";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
+  // Rate limit by IP
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0] || "unknown";
+  const { allowed, remaining } = checkRateLimit(`auth:${ip}`);
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "試行回数が多すぎます。15分後に再試行してください" },
+      { status: 429, headers: { "Retry-After": "900" } }
+    );
+  }
+
   const body = await request.json();
   const { password, action, initialAdmin } = body;
 

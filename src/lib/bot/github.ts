@@ -1,27 +1,30 @@
-import { Octokit } from "octokit";
-import { createAppAuth } from "@octokit/auth-app";
+import { App, Octokit } from "octokit";
 
-let appOctokit: Octokit | null = null;
+let app: App | null = null;
 
-export function getAppOctokit(): Octokit {
-  if (!appOctokit) {
-    appOctokit = new Octokit({
-      authStrategy: createAppAuth,
-      auth: {
-        appId: process.env.APP_ID!,
-        privateKey: process.env.PRIVATE_KEY!.replace(/\\n/g, "\n"),
+function getApp(): App {
+  if (!app) {
+    const appId = process.env.APP_ID;
+    const privateKey = process.env.PRIVATE_KEY;
+
+    if (!appId || !privateKey) {
+      throw new Error("APP_ID and PRIVATE_KEY must be set");
+    }
+
+    app = new App({
+      appId,
+      privateKey: privateKey.replace(/\\n/g, "\n"),
+      webhooks: {
+        secret: process.env.WEBHOOK_SECRET || "unused",
       },
     });
   }
-  return appOctokit;
+  return app;
 }
 
 export async function getInstallationOctokit(
   installationId: number
 ): Promise<Octokit> {
-  const app = getAppOctokit();
-  const { data } = await app.rest.apps.createInstallationAccessToken({
-    installation_id: installationId,
-  });
-  return new Octokit({ auth: data.token });
+  const githubApp = getApp();
+  return githubApp.getInstallationOctokit(installationId);
 }

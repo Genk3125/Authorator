@@ -5,34 +5,56 @@ import { handlePush } from "@/lib/bot/handlers/push";
 import { handlePullRequest } from "@/lib/bot/handlers/pull-request";
 import { handleCreate } from "@/lib/bot/handlers/create";
 
+export const runtime = "nodejs";
+
 export async function POST(request: NextRequest) {
   const body = await request.text();
   const signature = request.headers.get("x-hub-signature-256");
   const event = request.headers.get("x-github-event");
+  const deliveryId = request.headers.get("x-github-delivery");
 
-  // Verify webhook signature
+  // Verify webhook signature (required in production)
   const secret = process.env.WEBHOOK_SECRET;
-  if (secret && !verifyWebhookSignature(body, signature, secret)) {
+  if (!secret) {
+    console.error("WEBHOOK_SECRET is not set");
+    return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
+  }
+  if (!verifyWebhookSignature(body, signature, secret)) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
-  const payload = JSON.parse(body);
+  let payload;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
 
-  // Skip events from the bot itself
-  if (payload.sender?.type === "Bot") {
-    return NextResponse.json({ ok: true, skipped: true });
+  // Skip events from bots (including our own app)
+  const senderType = payload.sender?.type;
+  const senderLogin = payload.sender?.login;
+  if (senderType === "Bot" || senderLogin?.endsWith("[bot]")) {
+    return NextResponse.json({ ok: true, skipped: true, reason: "bot_sender" });
+  }
+
+  // Ping event (sent on webhook creation)
+  if (event === "ping") {
+    return NextResponse.json({ ok: true, event: "ping" });
   }
 
   // Get installation Octokit
   const installationId = payload.installation?.id;
   if (!installationId) {
-    return NextResponse.json(
-      { error: "No installation ID" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "No installation ID" }, { status: 400 });
   }
 
-  const octokit = await getInstallationOctokit(installationId);
+  let octokit;
+  try {
+    octokit = await getInstallationOctokit(installationId);
+  } catch (error) {
+    console.error("Failed to get installation token:", error);
+    return NextResponse.json({ error: "Auth failed" }, { status: 500 });
+  }
 
   try {
     let result;
@@ -51,11 +73,11 @@ export async function POST(request: NextRequest) {
         result = { action: "ignored", skipped: true };
     }
 
-    return NextResponse.json({ ok: true, ...result });
+    return NextResponse.json({ ok: true, delivery: deliveryId, ...result });
   } catch (error) {
-    console.error("Webhook handler error:", error);
+    console.error(`Webhook handler error [${event}] [${deliveryId}]:`, error);
     return NextResponse.json(
-      { error: "Internal error" },
+      { error: "Handler failed", event, delivery: deliveryId },
       { status: 500 }
     );
   }

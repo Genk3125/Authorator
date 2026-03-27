@@ -34,7 +34,6 @@ export async function handlePullRequest(
   octokit: Octokit,
   payload: PullRequestEvent
 ): Promise<{ action: string; skipped?: boolean }> {
-  // Only handle closed + merged PRs
   if (payload.action !== "closed" || !payload.pull_request.merged) {
     return { action: "not_merged", skipped: true };
   }
@@ -66,10 +65,25 @@ export async function handlePullRequest(
     return { action: "allowed" };
   }
 
-  // Revert unauthorized merge - restore base branch to pre-merge state
-  // We need to get the commit before the merge
-  const baseSha = pr.base.sha;
-  await revertMerge(octokit, owner, repo, baseBranch, baseSha);
+  // Get the parent of the merge commit (= pre-merge state of base branch)
+  const mergeCommitSha = pr.merge_commit_sha;
+  if (!mergeCommitSha) {
+    return { action: "error_no_merge_sha", skipped: true };
+  }
+
+  const { data: mergeCommit } = await octokit.rest.git.getCommit({
+    owner,
+    repo,
+    commit_sha: mergeCommitSha,
+  });
+
+  // First parent of a merge commit is the base branch's previous HEAD
+  const preMergeSha = mergeCommit.parents[0]?.sha;
+  if (!preMergeSha) {
+    return { action: "error_no_parent", skipped: true };
+  }
+
+  await revertMerge(octokit, owner, repo, baseBranch, preMergeSha);
 
   const message = buildRevertMessage("revert_merge", mergedBy, baseBranch);
   await postIssueComment(octokit, owner, repo, pr.number, message);
@@ -80,7 +94,7 @@ export async function handlePullRequest(
     user: mergedBy,
     branch: baseBranch,
     reason: `非権限者 ${mergedBy} による保護ブランチ ${baseBranch} へのマージをリバート`,
-    commitSha: pr.merge_commit_sha || undefined,
+    commitSha: mergeCommitSha,
   });
 
   return { action: "reverted" };
