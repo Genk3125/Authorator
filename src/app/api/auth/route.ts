@@ -4,11 +4,14 @@ import {
   setPassword,
   verifyPassword,
   createToken,
+  addAdminUser,
+  getAdminUsers,
 } from "@/lib/auth";
+import { getRedis } from "@/lib/db/redis";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { password, action } = body;
+  const { password, action, initialAdmin } = body;
 
   if (!password || typeof password !== "string") {
     return NextResponse.json(
@@ -26,10 +29,16 @@ export async function POST(request: NextRequest) {
 
   const hasPassword = await isPasswordSet();
 
-  // Initial setup
+  // Initial setup: set password + first admin user
   if (action === "setup" && !hasPassword) {
     await setPassword(password);
-    const token = createToken();
+
+    // Register initial admin GitHub user
+    if (initialAdmin && typeof initialAdmin === "string") {
+      await addAdminUser(initialAdmin.replace(/^@/, ""));
+    }
+
+    const token = createToken(initialAdmin || "setup");
     const response = NextResponse.json({ ok: true, setup: true });
     response.cookies.set("authrator_token", token, {
       httpOnly: true,
@@ -41,7 +50,7 @@ export async function POST(request: NextRequest) {
     return response;
   }
 
-  // Login
+  // Normal login: verify password + check OAuth session
   const valid = await verifyPassword(password);
   if (!valid) {
     return NextResponse.json(
@@ -50,8 +59,29 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const token = createToken();
-  const response = NextResponse.json({ ok: true });
+  // Check for OAuth session (GitHub login must be verified first)
+  const sessionId = request.cookies.get("authrator_oauth_session")?.value;
+  if (!sessionId) {
+    return NextResponse.json(
+      { error: "先に GitHub でログインしてください" },
+      { status: 401 }
+    );
+  }
+
+  const redis = getRedis();
+  const githubLogin = await redis.get<string>(`oauth:session:${sessionId}`);
+  if (!githubLogin) {
+    return NextResponse.json(
+      { error: "GitHub セッションが期限切れです。もう一度 GitHub ログインしてください" },
+      { status: 401 }
+    );
+  }
+
+  // Clean up OAuth session
+  await redis.del(`oauth:session:${sessionId}`);
+
+  const token = createToken(githubLogin);
+  const response = NextResponse.json({ ok: true, github: githubLogin });
   response.cookies.set("authrator_token", token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -59,10 +89,16 @@ export async function POST(request: NextRequest) {
     maxAge: 60 * 60 * 24,
     path: "/",
   });
+  response.cookies.delete("authrator_oauth_session");
   return response;
 }
 
 export async function GET() {
   const hasPassword = await isPasswordSet();
-  return NextResponse.json({ needsSetup: !hasPassword });
+  const adminUsers = await getAdminUsers();
+  return NextResponse.json({
+    needsSetup: !hasPassword,
+    hasOAuth: !!process.env.GITHUB_CLIENT_ID,
+    adminCount: adminUsers.length,
+  });
 }

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname.startsWith("/dashboard") || pathname.startsWith("/api/settings")) {
+  if (pathname.startsWith("/dashboard") || pathname.startsWith("/api/settings") || pathname.startsWith("/api/auth/admins")) {
     const token = request.cookies.get("authrator_token")?.value;
     if (!token) {
       if (pathname.startsWith("/api/")) {
@@ -35,5 +35,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/api/settings/:path*"],
+  matcher: ["/dashboard/:path*", "/api/settings/:path*", "/api/auth/admins"],
 };
