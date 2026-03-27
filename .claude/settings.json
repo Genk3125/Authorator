@@ -10,7 +10,8 @@
       "Bash(npm list:*)",
       "Bash(npx vercel:*)",
       "Bash(node -e \"try { require\\(''octokit''\\); console.log\\(''octokit ok''\\) } catch\\(e\\) { console.log\\(e.message\\) }\")",
-      "Bash(node -e \"try { const {Octokit} = require\\(''octokit''\\); console.log\\(Object.keys\\(require\\(''octokit''\\)\\).join\\('', ''\\)\\) } catch\\(e\\) { console.log\\(e.message\\) }\")"
+      "Bash(node -e \"try { const {Octokit} = require\\(''octokit''\\); console.log\\(Object.keys\\(require\\(''octokit''\\)\\).join\\('', ''\\)\\) } catch\\(e\\) { console.log\\(e.message\\) }\")",
+      "mcp__plugin_playwright_playwright__browser_navigate"
     ]
   }
 }

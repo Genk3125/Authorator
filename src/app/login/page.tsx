@@ -24,6 +24,7 @@ function LoginContent() {
   const [needsSetup, setNeedsSetup] = useState(false);
   const [hasOAuth, setHasOAuth] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [redisError, setRedisError] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -37,6 +38,12 @@ function LoginContent() {
       .then((data) => {
         setNeedsSetup(data.needsSetup);
         setHasOAuth(data.hasOAuth);
+        if (data.redisError) setRedisError(true);
+        setLoading(false);
+      })
+      .catch(() => {
+        setRedisError(true);
+        setNeedsSetup(true);
         setLoading(false);
       });
   }, []);
@@ -99,6 +106,16 @@ function LoginContent() {
             <h1 className="text-3xl font-bold text-white mb-2">Authorator</h1>
             <p className="text-gray-400">初期セットアップ</p>
           </div>
+
+          {redisError && (
+            <div className="mb-4 p-4 bg-red-900/20 border border-red-800 rounded-lg">
+              <p className="text-red-300 text-sm font-semibold mb-1">Redis 未接続</p>
+              <p className="text-red-400/70 text-xs">
+                Vercel の環境変数に UPSTASH_REDIS_REST_URL と UPSTASH_REDIS_REST_TOKEN を設定してから再デプロイしてください。
+                設定後にこのページをリロードしてください。
+              </p>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

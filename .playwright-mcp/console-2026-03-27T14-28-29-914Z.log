@@ -1,0 +1,4 @@
+[    1465ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://authorator.vercel.app/favicon.ico:0
+[    5961ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ https://authorator.vercel.app/api/auth:0
+[    5965ms] SyntaxError: Failed to execute 'json' on 'Response': Unexpected end of JSON input
+    at https://authorator.vercel.app/_next/static/chunks/app/login/page-f869ae39a0eeab92.js:1:1006

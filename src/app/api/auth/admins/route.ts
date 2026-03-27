@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminUsers, addAdminUser, removeAdminUser } from "@/lib/auth";
 
 export async function GET() {
-  const users = await getAdminUsers();
-  return NextResponse.json({ admins: users });
+  try {
+    const users = await getAdminUsers();
+    return NextResponse.json({ admins: users });
+  } catch (error) {
+    console.error("Failed to get admin users:", error);
+    return NextResponse.json({ admins: [], error: "Redis 接続エラー" }, { status: 503 });
+  }
 }
 
 export async function POST(request: NextRequest) {

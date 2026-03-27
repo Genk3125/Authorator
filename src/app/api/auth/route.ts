@@ -105,11 +105,22 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
-  const hasPassword = await isPasswordSet();
-  const adminUsers = await getAdminUsers();
-  return NextResponse.json({
-    needsSetup: !hasPassword,
-    hasOAuth: !!process.env.GITHUB_CLIENT_ID,
-    adminCount: adminUsers.length,
-  });
+  try {
+    const hasPassword = await isPasswordSet();
+    const adminUsers = await getAdminUsers();
+    return NextResponse.json({
+      needsSetup: !hasPassword,
+      hasOAuth: !!process.env.GITHUB_CLIENT_ID,
+      adminCount: adminUsers.length,
+    });
+  } catch (error) {
+    // Redis not configured yet — treat as fresh setup
+    console.error("Auth GET error (Redis may not be configured):", error);
+    return NextResponse.json({
+      needsSetup: true,
+      hasOAuth: !!process.env.GITHUB_CLIENT_ID,
+      adminCount: 0,
+      redisError: true,
+    });
+  }
 }
