@@ -16,7 +16,21 @@ export async function POST(request: NextRequest) {
   if (!username || typeof username !== "string") {
     return NextResponse.json({ error: "ユーザー名は必須です" }, { status: 400 });
   }
-  await addAdminUser(username.replace(/^@/, ""));
+
+  const cleanName = username.replace(/^@/, "").trim();
+
+  // Verify the GitHub user actually exists
+  const ghRes = await fetch(`https://api.github.com/users/${encodeURIComponent(cleanName)}`, {
+    headers: { Accept: "application/vnd.github+json" },
+  });
+  if (!ghRes.ok) {
+    return NextResponse.json(
+      { error: `GitHub ユーザー @${cleanName} が見つかりません` },
+      { status: 404 }
+    );
+  }
+
+  await addAdminUser(cleanName);
   const users = await getAdminUsers();
   return NextResponse.json({ admins: users });
 }
