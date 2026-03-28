@@ -288,7 +288,7 @@ export default function DashboardPage() {
       <div className="p-6 bg-gray-900 rounded-lg border border-gray-800">
         <h2 className="text-lg font-semibold text-white mb-2">ダッシュボード管理者</h2>
         <p className="text-sm text-gray-400 mb-4">
-          GitHub OAuth でログイン可能な GitHub アカウント
+          GitHub OAuth でログイン可能な GitHub アカウント（各ユーザーは初回ログイン時に個別パスワードを設定）
         </p>
 
         <div className="flex flex-wrap gap-2 mb-4">

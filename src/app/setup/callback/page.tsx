@@ -10,6 +10,7 @@ interface AppCredentials {
   webhook_secret: string;
   html_url: string;
   client_id: string;
+  client_secret: string;
 }
 
 export default function SetupCallbackPage() {
@@ -88,7 +89,9 @@ function SetupCallbackContent() {
 
   const envContent = `APP_ID=${credentials.id}
 PRIVATE_KEY="${credentials.pem.replace(/\n/g, "\\n")}"
-WEBHOOK_SECRET=${credentials.webhook_secret}`;
+WEBHOOK_SECRET=${credentials.webhook_secret}
+GITHUB_CLIENT_ID=${credentials.client_id}
+GITHUB_CLIENT_SECRET=${credentials.client_secret}`;
 
   return (
     <div className="max-w-3xl mx-auto p-8">
@@ -186,6 +189,36 @@ WEBHOOK_SECRET=${credentials.webhook_secret}`;
                   className="absolute top-2 right-2 text-gray-500 hover:text-white text-xs"
                 >
                   {copied === "pem" ? "OK" : "Copy"}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">GITHUB_CLIENT_ID</label>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 px-3 py-2 bg-gray-800 rounded text-sm text-green-400 font-mono overflow-x-auto">
+                  {credentials.client_id}
+                </code>
+                <button
+                  onClick={() => copyToClipboard(credentials.client_id, "clientid")}
+                  className="text-gray-500 hover:text-white text-xs shrink-0"
+                >
+                  {copied === "clientid" ? "OK" : "Copy"}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">GITHUB_CLIENT_SECRET</label>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 px-3 py-2 bg-gray-800 rounded text-sm text-green-400 font-mono overflow-x-auto">
+                  {credentials.client_secret}
+                </code>
+                <button
+                  onClick={() => copyToClipboard(credentials.client_secret, "clientsecret")}
+                  className="text-gray-500 hover:text-white text-xs shrink-0"
+                >
+                  {copied === "clientsecret" ? "OK" : "Copy"}
                 </button>
               </div>
             </div>

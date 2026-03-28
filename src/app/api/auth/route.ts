@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  isPasswordSet,
+  isUserPasswordSet,
   setPassword,
   verifyPassword,
   createToken,
@@ -8,12 +8,13 @@ import {
   getAdminUsers,
 } from "@/lib/auth";
 import { getRedis } from "@/lib/db/redis";
+import { isAnyUserPasswordSet } from "@/lib/db/queries";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
   // Rate limit by IP
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0] || "unknown";
-  const { allowed, remaining } = checkRateLimit(`auth:${ip}`);
+  const { allowed } = checkRateLimit(`auth:${ip}`);
   if (!allowed) {
     return NextResponse.json(
       { error: "試行回数が多すぎます。15分後に再試行してください" },
@@ -38,18 +39,28 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const hasPassword = await isPasswordSet();
-
-  // Initial setup: set password + first admin user
-  if (action === "setup" && !hasPassword) {
-    await setPassword(password);
-
-    // Register initial admin GitHub user
-    if (initialAdmin && typeof initialAdmin === "string") {
-      await addAdminUser(initialAdmin.replace(/^@/, ""));
+  // --- Initial Setup: first admin ---
+  if (action === "setup") {
+    const admins = await getAdminUsers();
+    if (admins.length > 0) {
+      return NextResponse.json(
+        { error: "初期セットアップは既に完了しています" },
+        { status: 400 }
+      );
     }
 
-    const token = createToken(initialAdmin || "setup");
+    if (!initialAdmin || typeof initialAdmin !== "string") {
+      return NextResponse.json(
+        { error: "管理者の GitHub ユーザー名を入力してください" },
+        { status: 400 }
+      );
+    }
+
+    const username = initialAdmin.replace(/^@/, "").toLowerCase();
+    await addAdminUser(username);
+    await setPassword(username, password);
+
+    const token = createToken(username);
     const response = NextResponse.json({ ok: true, setup: true });
     response.cookies.set("authrator_token", token, {
       httpOnly: true,
@@ -61,16 +72,8 @@ export async function POST(request: NextRequest) {
     return response;
   }
 
-  // Normal login: verify password + check OAuth session
-  const valid = await verifyPassword(password);
-  if (!valid) {
-    return NextResponse.json(
-      { error: "パスワードが正しくありません" },
-      { status: 401 }
-    );
-  }
-
-  // Check for OAuth session (GitHub login must be verified first)
+  // --- Normal Login / First-time password setup ---
+  // Require OAuth session
   const sessionId = request.cookies.get("authrator_oauth_session")?.value;
   if (!sessionId) {
     return NextResponse.json(
@@ -88,11 +91,30 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const username = githubLogin.toLowerCase();
+
+  // Check if this user has a password set
+  const hasPassword = await isUserPasswordSet(username);
+
+  if (!hasPassword) {
+    // First login → set their password
+    await setPassword(username, password);
+  } else {
+    // Verify existing password
+    const valid = await verifyPassword(username, password);
+    if (!valid) {
+      return NextResponse.json(
+        { error: "パスワードが正しくありません" },
+        { status: 401 }
+      );
+    }
+  }
+
   // Clean up OAuth session
   await redis.del(`oauth:session:${sessionId}`);
 
   const token = createToken(githubLogin);
-  const response = NextResponse.json({ ok: true, github: githubLogin });
+  const response = NextResponse.json({ ok: true, github: githubLogin, isNewPassword: !hasPassword });
   response.cookies.set("authrator_token", token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -106,15 +128,14 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   try {
-    const hasPassword = await isPasswordSet();
-    const adminUsers = await getAdminUsers();
+    const admins = await getAdminUsers();
+    const needsSetup = admins.length === 0;
     return NextResponse.json({
-      needsSetup: !hasPassword,
+      needsSetup,
       hasOAuth: !!process.env.GITHUB_CLIENT_ID,
-      adminCount: adminUsers.length,
+      adminCount: admins.length,
     });
   } catch (error) {
-    // Redis not configured yet — treat as fresh setup
     console.error("Auth GET error (Redis may not be configured):", error);
     return NextResponse.json({
       needsSetup: true,

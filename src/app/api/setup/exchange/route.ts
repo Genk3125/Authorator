@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
       webhook_secret: data.webhook_secret,
       html_url: data.html_url,
       client_id: data.client_id,
+      client_secret: data.client_secret,
     });
   } catch {
     return NextResponse.json(

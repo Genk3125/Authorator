@@ -1,26 +1,26 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { getAdminPasswordHash, setAdminPasswordHash } from "@/lib/db/queries";
+import { getUserPasswordHash, setUserPasswordHash } from "@/lib/db/queries";
 import { getRedis } from "@/lib/db/redis";
 
 const JWT_SECRET = () => process.env.JWT_SECRET!;
 const TOKEN_EXPIRY = "24h";
 const ADMIN_USERS_KEY = "admin:users";
 
-// --- Password ---
+// --- Per-User Password ---
 
-export async function isPasswordSet(): Promise<boolean> {
-  const hash = await getAdminPasswordHash();
+export async function isUserPasswordSet(username: string): Promise<boolean> {
+  const hash = await getUserPasswordHash(username);
   return hash !== null;
 }
 
-export async function setPassword(password: string): Promise<void> {
+export async function setPassword(username: string, password: string): Promise<void> {
   const hash = await bcrypt.hash(password, 12);
-  await setAdminPasswordHash(hash);
+  await setUserPasswordHash(username, hash);
 }
 
-export async function verifyPassword(password: string): Promise<boolean> {
-  const hash = await getAdminPasswordHash();
+export async function verifyPassword(username: string, password: string): Promise<boolean> {
+  const hash = await getUserPasswordHash(username);
   if (!hash) return false;
   return bcrypt.compare(password, hash);
 }

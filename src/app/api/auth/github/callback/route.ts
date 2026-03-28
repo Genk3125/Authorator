@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getRedis } from "@/lib/db/redis";
-import { isAdminUser } from "@/lib/auth";
+import { isAdminUser, isUserPasswordSet } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -67,7 +67,13 @@ export async function GET(request: NextRequest) {
   const sessionId = randomBytes(16).toString("hex");
   await redis.set(`oauth:session:${sessionId}`, githubLogin, { ex: 600 });
 
-  const response = NextResponse.redirect(new URL("/login?step=password", request.url));
+  // Check if this user has set a password before
+  const hasPassword = await isUserPasswordSet(githubLogin);
+  const newParam = hasPassword ? "" : "&new=1";
+
+  const response = NextResponse.redirect(
+    new URL(`/login?step=password${newParam}`, request.url)
+  );
   response.cookies.set("authrator_oauth_session", sessionId, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

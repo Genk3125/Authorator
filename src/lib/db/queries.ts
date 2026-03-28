@@ -77,14 +77,24 @@ export async function getActionLogs(
   return logs;
 }
 
-// --- Admin Password ---
+// --- Per-User Password ---
 
-export async function getAdminPasswordHash(): Promise<string | null> {
+export async function getUserPasswordHash(username: string): Promise<string | null> {
   const redis = getRedis();
-  return redis.get<string>("admin:password");
+  return redis.get<string>(`user:password:${username.toLowerCase()}`);
 }
 
-export async function setAdminPasswordHash(hash: string): Promise<void> {
+export async function setUserPasswordHash(username: string, hash: string): Promise<void> {
   const redis = getRedis();
-  await redis.set("admin:password", hash);
+  await redis.set(`user:password:${username.toLowerCase()}`, hash);
+}
+
+export async function isAnyUserPasswordSet(): Promise<boolean> {
+  const redis = getRedis();
+  const admins = await redis.smembers("admin:users");
+  for (const admin of admins) {
+    const hash = await redis.get(`user:password:${admin}`);
+    if (hash) return true;
+  }
+  return false;
 }

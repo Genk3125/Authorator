@@ -19,6 +19,7 @@ export default function LoginPage() {
 
 function LoginContent() {
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [initialAdmin, setInitialAdmin] = useState("");
   const [error, setError] = useState("");
   const [needsSetup, setNeedsSetup] = useState(false);
@@ -31,6 +32,7 @@ function LoginContent() {
   const step = searchParams.get("step");
   const oauthError = searchParams.get("error");
   const oauthUser = searchParams.get("user");
+  const isNewUser = searchParams.get("new") === "1";
 
   useEffect(() => {
     fetch("/api/auth")
@@ -69,6 +71,12 @@ function LoginContent() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+
+    // For new users setting password, confirm match
+    if (isNewUser && password !== confirmPassword) {
+      setError("パスワードが一致しません");
+      return;
+    }
 
     const res = await fetch("/api/auth", {
       method: "POST",
@@ -120,7 +128,7 @@ function LoginContent() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm text-gray-300 mb-2">
-                管理者の GitHub ユーザー名
+                あなたの GitHub ユーザー名
               </label>
               <input
                 type="text"
@@ -131,13 +139,13 @@ function LoginContent() {
                 required
               />
               <p className="text-xs text-gray-500 mt-1">
-                この GitHub アカウントがダッシュボードの管理者になります
+                この GitHub アカウントが最初の管理者になります
               </p>
             </div>
 
             <div>
               <label className="block text-sm text-gray-300 mb-2">
-                管理パスワード
+                あなたのパスワード
               </label>
               <input
                 type="password"
@@ -149,7 +157,7 @@ function LoginContent() {
                 required
               />
               <p className="text-xs text-gray-500 mt-1">
-                GitHub OAuth 後に追加で要求される二重認証パスワードです
+                あなた専用のログインパスワードです（他のユーザーとは共有されません）
               </p>
             </div>
 
@@ -175,7 +183,11 @@ function LoginContent() {
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-white mb-2">Authorator</h1>
             <p className="text-green-400 text-sm mb-1">GitHub 認証 OK</p>
-            <p className="text-gray-400">管理パスワードを入力してください</p>
+            {isNewUser ? (
+              <p className="text-gray-400">初回ログインです。あなた専用のパスワードを設定してください</p>
+            ) : (
+              <p className="text-gray-400">パスワードを入力してください</p>
+            )}
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -185,12 +197,26 @@ function LoginContent() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-                placeholder="管理パスワード"
+                placeholder={isNewUser ? "新しいパスワード（8文字以上）" : "パスワード"}
                 minLength={8}
                 required
                 autoFocus
               />
             </div>
+
+            {isNewUser && (
+              <div>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                  placeholder="パスワード確認"
+                  minLength={8}
+                  required
+                />
+              </div>
+            )}
 
             {error && <div className="text-red-400 text-sm">{error}</div>}
 
@@ -198,8 +224,14 @@ function LoginContent() {
               type="submit"
               className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
             >
-              ログイン
+              {isNewUser ? "パスワードを設定してログイン" : "ログイン"}
             </button>
+
+            {isNewUser && (
+              <p className="text-xs text-gray-500 text-center">
+                このパスワードはあなた専用です。他のユーザーとは共有されません。
+              </p>
+            )}
           </form>
         </div>
       </div>
@@ -246,7 +278,7 @@ function LoginContent() {
 
           <div className="text-center">
             <p className="text-xs text-gray-600">
-              GitHub 認証 + 管理パスワードの二重認証
+              GitHub 認証 + 個人パスワードの二重認証
             </p>
           </div>
         </div>

@@ -15,7 +15,7 @@ export default function SetupPage() {
         active: true,
       },
       redirect_url: `${url}/setup/callback`,
-      callback_urls: [`${url}/setup/callback`],
+      callback_urls: [`${url}/setup/callback`, `${url}/api/auth/github/callback`],
       public: false,
       default_permissions: {
         contents: "write",
