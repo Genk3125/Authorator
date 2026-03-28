@@ -260,9 +260,14 @@ export default function DashboardPage() {
               >
                 <Link href={`/dashboard/${config.owner}/${config.repo}`} className="flex-1">
                   <div className="flex items-center gap-3">
+                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                      config.enabled && health?.checks.github_app === "configured"
+                        ? "bg-green-400 shadow-[0_0_6px_rgba(74,222,128,0.6)]"
+                        : "bg-gray-600"
+                    }`} />
                     <span className="text-white font-medium">{config.owner}/{config.repo}</span>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${config.enabled ? "bg-green-900 text-green-300" : "bg-gray-800 text-gray-400"}`}>
-                      {config.enabled ? "有効" : "無効"}
+                      {config.enabled ? "稼働中" : "停止"}
                     </span>
                     <span className="text-xs text-gray-500">
                       保護: {config.protectedBranches.join(", ") || "なし"}

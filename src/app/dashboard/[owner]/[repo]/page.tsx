@@ -55,11 +55,14 @@ export default function RepoSettingsPage() {
       body: JSON.stringify(updated),
     });
 
+    const data = await res.json();
     if (res.ok) {
-      const data = await res.json();
       setConfig(data.config);
       setMessage("保存しました");
       setTimeout(() => setMessage(""), 2000);
+    } else {
+      setMessage(data.error || "エラーが発生しました");
+      setTimeout(() => setMessage(""), 3000);
     }
     setSaving(false);
   }
@@ -83,7 +86,7 @@ export default function RepoSettingsPage() {
           {owner}/{repo}
         </h1>
         {message && (
-          <span className="text-green-400 text-sm">{message}</span>
+          <span className={`text-sm ${message.includes("エラー") || message.includes("見つかりません") ? "text-red-400" : "text-green-400"}`}>{message}</span>
         )}
       </div>
 
